@@ -4,7 +4,7 @@
 
 
 
-/*
+/**
  * Step function sequence
  */
 
@@ -32,14 +32,32 @@ void runSequence(Fs&& ... fs)
 }
 
 
+/**
+ * MeberFunctionToFunction
+ */
+
+
+template <auto MemberFunction, typename T = decltype(MemberFunction)>
+struct MeberFunctionToFunction;
+
+template <auto MemberFunction, typename ReturnType, typename BaseClass, typename ... Args>
+struct MeberFunctionToFunction<MemberFunction, ReturnType(BaseClass::*)(Args...)>
+{
+  static ReturnType value(BaseClass* pBaseClass, Args ... args)
+  {
+    return (pBaseClass->*MemberFunction)(std::forward<Args>(args) ...);
+  }
+};
+
+template <auto MemberFunction>
+auto MeberFunctionToFunction_v = MeberFunctionToFunction<MemberFunction>::value;
+
 
 
 
 
 int main()
 {
-
-  const std::function f = test;
 
   runSequence(
       [](TCallback onEnd)
