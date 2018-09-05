@@ -14,16 +14,31 @@ using TCallback = std::function<void()>;
 using StepCallback = std::function<void(TCallback)>;
 
 template <typename F>
-constexpr auto makeSequence(F&& f)
+auto makeSequence(F&& f)
 {
-  return std::bind(f, [](){});
+  if constexpr (std::is_constructible_v<StepCallback, std::decay_t<F>>)
+  {
+    return std::bind(std::forward<F>(f), [](){});
+  }
+  else if constexpr (std::is_constructible_v<TCallback, std::decay_t<F>>)
+  {
+    return std::forward<F>(f);
+  }
 }
 
 template <typename F, typename ... Fs>
-constexpr auto makeSequence(F&& f, Fs&& ... fs)
+auto makeSequence(F&& f, Fs&& ... fs)
 {
-  return std::bind(f, TCallback{ makeSequence(std::forward<Fs>(fs)...)});
+  if constexpr (std::is_constructible_v<StepCallback, std::decay_t<F>>)
+  {
+    return std::bind(f, TCallback{ makeSequence(std::forward<Fs>(fs)...)});
+  }
+  else if constexpr (std::is_constructible_v<TCallback, std::decay_t<F>>)
+  {
+    return std::bind([f](TCallback onEnd) { f(); onEnd(); }, TCallback{ makeSequence(std::forward<Fs>(fs)...)});
+  }
 }
+
 
 template <typename ... Fs>
 void runSequence(Fs&& ... fs)
@@ -65,30 +80,26 @@ int main()
         std::cout << 1 << std::endl;
         onEnd();
       },
-      [](TCallback onEnd)
+      []()
       {
         std::cout << 2 << std::endl;
-        onEnd();
       },
       [](TCallback onEnd)
       {
         std::cout << 3 << std::endl;
         onEnd();
       },
-      [](TCallback onEnd)
-      {
-        std::cout << 5 << std::endl;
-        onEnd();
-      },
-      [](TCallback onEnd)
+      []()
       {
         std::cout << 4 << std::endl;
-        onEnd();
       },
-      [](TCallback onEnd)
+      []()
+      {
+        std::cout << 5 << std::endl;
+      },
+      []()
       {
         std::cout << 6 << std::endl;
-        onEnd();
       });
 
 
