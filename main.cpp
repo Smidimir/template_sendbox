@@ -163,15 +163,128 @@ std::array<int, 3> constexpr constexpr_text()
 }
 
 
+/**
+ * value to type mapping
+ */
+
+#include <map>
+
+template <typename T>
+struct type_wrapper {};
+
+template <typename Variant>
+struct VariantToTypeWrapper;
+
+template <typename ... Ts>
+struct VariantToTypeWrapper<std::variant<Ts ...>>
+{
+  using type = std::variant<type_wrapper<Ts> ...>;
+};
+
+template <typename ... Ts>
+struct TypeList {};
+
+template <typename Variant>
+struct VariantToTypeList;
+
+template <typename ... Ts>
+struct VariantToTypeList<std::variant<Ts ...>>
+{
+  using type = TypeList<Ts...>;
+};
+
+template <typename ValType, typename Variant>
+class ValToTypeMap
+{
+public:
+  using TWVariant = typename VariantToTypeWrapper<Variant>::type;
+  using TList = typename VariantToTypeList<Variant>::type;
+
+  template <typename ... Ts>
+  ValToTypeMap(Ts&& ... ts)
+  {
+    addType(TList{}, std::forward<Ts>(ts) ...);
+  }
+
+  Variant create(ValType const& val)
+  {
+    return std::visit([this](auto const& v) { return create(v);}, m_map[val]);
+  }
+
+  template <typename ... Args>
+  Variant create(ValType const& val, Args&& ... args)
+  {
+    return std::visit([this, args = std::make_tuple(std::forward<Args>(args) ...)](auto const& v) { return create(v, std::move(args));}, m_map[val]);
+  }
+
+//private:
+  template <typename T>
+  Variant create(type_wrapper<T>)
+  {
+    return T{};
+  }
+
+  template <typename T, typename Tuple>
+  Variant create(type_wrapper<T>, Tuple&& t)
+  {
+    return create(type_wrapper<T>{}, std::forward<Tuple>(t),
+        std::make_index_sequence<std::tuple_size<Tuple>::value>() );
+  }
+
+  template <typename T, typename Tuple, std::size_t... Inds>
+  Variant create(type_wrapper<T>, Tuple&& tuple, std::index_sequence<Inds...>)
+  {
+    return T(std::get<Inds>(std::forward<Tuple>(tuple))...);
+  }
+
+  template <typename T, typename Arg, typename ... Ts, typename ... Args>
+  void addType(TypeList<T, Ts ...>, Arg&& arg, Args&& ... args)
+  {
+    m_map[arg] = type_wrapper<T>{};
+    addType(TypeList<Ts ...>{}, std::forward<Args>(args) ...);
+  }
+
+  template <typename T, typename Arg>
+  void addType(TypeList<T> typeList, Arg&& arg)
+  {
+    m_map[arg] = type_wrapper<T>{};
+  }
+
+//private:
+
+  std::map<ValType, TWVariant> m_map;
+};
+
+
 int main()
 {
-  auto constexpr arr = constexpr_text();
+//  auto constexpr arr = constexpr_text();
+//
+//  std::array<int, arr[0]> arr1;
+//  std::array<int, arr[1]> arr2;
+//  std::array<int, arr[2]> arr3;
+//
+//  std::cout << arr1.size() << " " << arr2.size() << " " << arr3.size() << std::endl;
 
-  std::array<int, arr[0]> arr1;
-  std::array<int, arr[1]> arr2;
-  std::array<int, arr[2]> arr3;
+  using V = std::variant<int, char, double>;
 
-  std::cout << arr1.size() << " " << arr2.size() << " " << arr3.size() << std::endl;
+  ValToTypeMap<int, V> mapper{1, 2, 3};
+
+  std::cout << mapper.m_map.size() << std::endl;
+
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << std::endl; }, mapper.m_map[1]);
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << std::endl; }, mapper.m_map[2]);
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << std::endl; }, mapper.m_map[3]);
+
+  auto a = mapper.create(1);
+  auto b = mapper.create(1, 'a');
+  auto c = mapper.create(2, 'a');
+  auto d = mapper.create(3, 'a');
+
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << " : " << v << std::endl; }, a);
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << " : " << v << std::endl; }, b);
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << " : " << v << std::endl; }, c);
+  std::visit([](auto const& v){ std::cout << typeid(v).name() << " : " << v << std::endl; }, d);
 
   return 0;
 }
