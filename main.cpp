@@ -1,6 +1,8 @@
 #include <iostream>
 
 #include <functional>
+#include <variant>
+#include <iomanip>
 
 
 
@@ -46,34 +48,11 @@ void runSequence(Fs&& ... fs)
   makeSequence(std::forward<Fs>(fs)...)();
 }
 
-
-/**
- * MeberFunctionToFunction
- */
-
-
-template <auto MemberFunction, typename T = decltype(MemberFunction)>
-struct MeberFunctionToFunction;
-
-template <auto MemberFunction, typename ReturnType, typename BaseClass, typename ... Args>
-struct MeberFunctionToFunction<MemberFunction, ReturnType(BaseClass::*)(Args...)>
-{
-  static ReturnType value(BaseClass* pBaseClass, Args ... args)
-  {
-    return (pBaseClass->*MemberFunction)(std::forward<Args>(args) ...);
-  }
-};
-
-template <auto MemberFunction>
-auto MeberFunctionToFunction_v = MeberFunctionToFunction<MemberFunction>::value;
-
-
-
-
-
-int main()
+namespace usage
 {
 
+void stepFunctionSequence()
+{
   runSequence(
       [](TCallback onEnd)
       {
@@ -101,10 +80,98 @@ int main()
       {
         std::cout << 6 << std::endl;
       });
+}
+
+}
 
 
+/**
+ * MeberFunctionToFunction
+ */
 
 
-  std::cout << "Hello, World!" << std::endl;
+template <auto MemberFunction, typename T = decltype(MemberFunction)>
+struct MeberFunctionToFunction;
+
+template <auto MemberFunction, typename ReturnType, typename BaseClass, typename ... Args>
+struct MeberFunctionToFunction<MemberFunction, ReturnType(BaseClass::*)(Args...)>
+{
+  static ReturnType value(BaseClass* pBaseClass, Args ... args)
+  {
+    return (pBaseClass->*MemberFunction)(std::forward<Args>(args) ...);
+  }
+};
+
+template <auto MemberFunction>
+auto MeberFunctionToFunction_v = MeberFunctionToFunction<MemberFunction>::value;
+
+namespace usage
+{
+
+void meberFunctionToFunction()
+{
+  class A
+  {
+  public:
+    void x()
+    {
+      std::cout << "Hello world" << std::endl;
+    }
+  };
+
+  auto x = MeberFunctionToFunction_v<&A::x>;
+
+  A a;
+
+  x(&a);
+}
+
+}
+
+
+/**
+ * constexpr test
+ */
+
+
+#include <array>
+
+
+std::array<int, 3> constexpr constexpr_text()
+{
+  std::array<int, 3> constexpr arr = []() -> std::array<int, 3>
+  {
+    std::array<int, 3> out = {3, 1, 2};
+
+    for(size_t i = 0; i < out.size() - 1; ++i)
+    {
+      for(size_t j = i + 1; j < out.size(); ++j)
+      {
+        if(out[i] < out[j])
+        {
+          int tmp = out[i];
+          out[i] = out[j];
+          out[j] = tmp;
+        }
+      }
+    }
+
+    return out;
+  }();
+
+  return arr;
+}
+
+
+int main()
+{
+  auto constexpr arr = constexpr_text();
+
+  std::array<int, arr[0]> arr1;
+  std::array<int, arr[1]> arr2;
+  std::array<int, arr[2]> arr3;
+
+  std::cout << arr1.size() << " " << arr2.size() << " " << arr3.size() << std::endl;
+
   return 0;
 }
