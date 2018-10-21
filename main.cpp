@@ -186,6 +186,19 @@ public:
     std::cout << "ConstructInformer: move" << std::endl;
   }
 
+  template <typename T>
+  ConstructInformer(T&&)
+  {
+    std::cout << "ConstructInformer: move" << std::endl;
+  }
+
+  template <typename T>
+  ConstructInformer& operator = (T&&)
+  {
+    std::cout << "ConstructInformer: assign any type" << std::endl;
+    return *this;
+  }
+
   ConstructInformer& operator = (ConstructInformer const&)
   {
     std::cout << "ConstructInformer: assign" << std::endl;
@@ -271,7 +284,7 @@ public:
   constexpr variant_object_creator(variant_object_creator&&) noexcept = default;
 
   template <typename T>
-  explicit constexpr variant_object_creator(T&& t)
+  constexpr variant_object_creator(T&& t)
     : m_cur_type {std::forward<T>(t)}
   {;}
 
@@ -322,13 +335,22 @@ private:
   template <typename T, typename ... Args>
   variant_object_type construct(type_holder<T>, Args&& ... args)
   {
-    if constexpr (std::is_constructible_v<T, decltype(std::forward<Args>(args)) ...>)
+    if constexpr ( std::is_constructible_v<T, decltype(std::forward<Args>(args)) ...>
+                || std::is_constructible_v<T, std::initializer_list<std::decay_t<type_list_ft<Args ...>>>> )
     {
-      return T{std::forward<Args>(args) ...};
+      if(std::holds_alternative<type_holder<T>>(m_cur_type))
+      {
+        return T{std::forward<Args>(args) ...};
+      }
+      else
+      {
+        assert(false && "This code never runs, but gets checked in compile time anyway");
+        return {};
+      }
     }
     else
     {
-      assert(false);
+      assert(false && "Object cannot be constructed using current Args&& ... args");
       return T{};
     }
   }
@@ -370,14 +392,31 @@ private:
 
 int main()
 {
-  using V = std::variant<char, int, long, ConstructInformer>;
+  using V = std::variant<std::vector<int>, std::vector<char>>;
 
-  vt_mapper<int, V> mapper{1, 2, 3, 4};
+  vt_mapper<std::string, V> mapper{"INT", "CHAR"};
 
-  variant_object_creator<V> voc{type_holder<ConstructInformer>{}};
+  V v = mapper["INT"](1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 
-  V v1 = mapper[4](ConstructInformer{});
-  V v2 = mapper[4](std::move(ConstructInformer{}));
+  std::visit([](auto const& vec)
+  {
+    for(auto it : vec)
+    {
+      std::cout << it << " ";
+    }
+    std::cout << std::endl;
+  }, v);
+
+  v = mapper["CHAR"]('a', 'b', 'c', 'd', 'e');
+
+  std::visit([](auto const& vec)
+             {
+               for(auto it : vec)
+               {
+                 std::cout << it << " ";
+               }
+               std::cout << std::endl;
+             }, v);
 
 
 //  std::visit([](auto&& v) { std::cout << typeid(v).name() << std::endl; }, v1);
